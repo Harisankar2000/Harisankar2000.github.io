@@ -210,13 +210,13 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
           <h3>Software Engineer (Backend)</h3>
           <div class="org">Tapsys Private Limited (TapFin) · Mumbai</div>
           <ul>
-            <li>Built a real-time fleet management system on Fastify, ClickHouse and PostgreSQL. It processes live telemetry from several EV partners and feeds fleet, asset and lender risk dashboards.</li>
-            <li>Designed event-driven pipelines on Kafka and BullMQ for rule-based alerts, device sync and scheduled jobs.</li>
-            <li>Built a central authentication service on Better Auth with multi-tenant organisations, RBAC, OTP login and audit logs. Legacy users moved over without a password reset.</li>
-            <li>Built loan origination APIs from lead through credit, sanction, Key Fact Statement and disbursement.</li>
-            <li>Integrated KYC (PAN, Aadhaar, GST), CRIF credit bureau, penny-drop and e-mandate providers.</li>
-            <li>Wrote the notification service from scratch: email, SMS, WhatsApp, Firebase push, Microsoft Teams and in-app.</li>
-            <li>Built a streaming Excel and CSV export engine with backpressure, async jobs and S3-compatible storage.</li>
+            <li>Developed a real-time Fleet Management System (FMS) on Node.js (Fastify), ClickHouse and PostgreSQL that processes live vehicle telemetry from multiple EV partners, including SoC, vehicle status, idling time, charging data, downtime, range analytics and driver scores. It powers the fleet dashboards, the asset passport and the lender portfolio/risk dashboards.</li>
+            <li>Designed event-driven pipelines on Apache Kafka and BullMQ/Redis for rule-based alerts, device sync, scheduled jobs and background processing.</li>
+            <li>Built a centralized authentication service on Better Auth with multi-tenant organizations, RBAC, OTP login, session management and audit logs; migrated legacy users without forced password resets by supporting legacy bcrypt hashes.</li>
+            <li>Built loan origination (LOS) APIs with Prisma ORM covering lead, credit, QC, sanction and finance approvals through Key Fact Statement (KFS), invoicing and full/partial disbursement.</li>
+            <li>Integrated third-party fintech APIs for KYC (PAN, Aadhaar, GST via Surepass and Decentro), CRIF credit bureau, penny-drop bank verification and e-mandate.</li>
+            <li>Built the notification microservice from scratch, delivering unified alerts via email, SMS, WhatsApp, Firebase push, Microsoft Teams and in-app, plus automated weekly portfolio emails for lenders.</li>
+            <li>Engineered a streaming Excel/CSV export engine for large datasets with backpressure, Redis-cached previews, async jobs and S3-compatible storage; shipped via Docker multi-stage builds and Jenkins CI/CD with Vitest tests.</li>
           </ul>
         </div>
       </div>
@@ -226,8 +226,11 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
           <h3>Jr. Backend Engineer</h3>
           <div class="org">Sirovate Technologies Limited (SIRO) · Remote</div>
           <ul>
-            <li>Built a Clinical Study Report generation tool for a pharmaceutical company, with a multi-stage review workflow on Node.js, AWS Lambda and PostgreSQL.</li>
-            <li>Used S3 for document storage and WebSocket for real-time notifications, and cut the time taken to generate the final report.</li>
+            <li>Developed a Clinical Study Report (CSR) generation tool for a pharmaceutical company, integrating multiple document types and streamlining the review and approval process.</li>
+            <li>Implemented a multi-stage review workflow with Node.js, AWS Lambda and PostgreSQL, ensuring controlled phase transitions and compliance with industry standards.</li>
+            <li>Built backend services using AWS S3 for document storage and WebSocket for real-time notifications.</li>
+            <li>Used PostgreSQL to manage complex data relationships and maintain data integrity across the CSR lifecycle.</li>
+            <li>Optimized the final CSR generation workflow, reducing processing time and improving overall system performance.</li>
           </ul>
         </div>
       </div>
@@ -237,8 +240,9 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
           <h3>Jr. Backend Developer</h3>
           <div class="org">TimesPro (Times Group) · Mumbai</div>
           <ul>
-            <li>Built a unified login system on Node.js, AWS Lambda, MongoDB, Cognito, API Gateway, S3 and SNS.</li>
-            <li>Sped up MongoDB reads through query optimisation and indexing.</li>
+            <li>Developed a secure, scalable unified login system using Node.js, AWS Lambda, MongoDB, Cognito, API Gateway, S3 and SNS.</li>
+            <li>Improved data access and retrieval performance in MongoDB through query optimization and indexing.</li>
+            <li>Participated in Agile ceremonies, including story grooming, sprint planning and retrospectives, delivering backend increments with cross-functional teams.</li>
           </ul>
         </div>
       </div>
@@ -248,7 +252,9 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
           <h3>Full-Stack Developer Intern</h3>
           <div class="org">10X Academy · Hyderabad</div>
           <ul>
-            <li>Built and deployed web apps with Node.js, Express, React and MongoDB, including registration and login with bcrypt and JWT.</li>
+            <li>Built and deployed web applications with Node.js, Express.js, React and MongoDB, implementing RESTful APIs and integrating frontend with backend.</li>
+            <li>Built registration, login and secure password storage using bcrypt and JWT-based session management, structured with the MVC pattern.</li>
+            <li>Debugged and troubleshot application issues to maintain code quality and performance.</li>
           </ul>
         </div>
       </div>
