@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Portfolio of Harisankar Sahoo, software engineer in Mumbai: Node.js, React, PostgreSQL, Kafka and AWS.">
+<title>Harisankar Sahoo Portfolio</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one left-aligned column on ledger paper; the work history is set as a ledger, dates in the margin column. */
+:root {
+  --paper: #edf2ef;
+  --surface: #f8faf9;
+  --ink: #14211d;
+  --muted: #56655f;
+  --rule: #cdd8d3;
+  --accent: #0b6b53;
+  --accent-soft: #d9ebe4;
+  --debit: #9a4a12;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1614; --surface: #151f1c; --ink: #e4ece9; --muted: #96a7a0;
+    --rule: #2a3833; --accent: #63cfa9; --accent-soft: #17302a; --debit: #e0a064;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1614; --surface: #151f1c; --ink: #e4ece9; --muted: #96a7a0;
+  --rule: #2a3833; --accent: #63cfa9; --accent-soft: #17302a; --debit: #e0a064;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+img { max-width: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  padding-block: 48px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.1; }
+p { margin: 0; }
+.label {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Hero */
+.hero { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 40px; align-items: end; }
+.hero-text { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1 { font-size: clamp(40px, 8vw, 76px); font-weight: 700; letter-spacing: -0.02em; }
+.role { font-size: 19px; font-weight: 500; }
+.summary { color: var(--muted); max-width: 58ch; }
+.links { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn {
+  font: 500 14px var(--body);
+  padding: 9px 16px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn.primary { background: var(--ink); color: var(--paper); }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary:hover { background: var(--accent); color: var(--paper); }
+
+/* Journal entry: the hero's one subject-specific object */
+.journal {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+.journal header, .journal footer { padding: 10px 14px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.journal header { border-bottom: 1px solid var(--rule); color: var(--muted); }
+.journal footer { border-top: 1px solid var(--rule); color: var(--accent); }
+.journal table { width: 100%; border-collapse: collapse; }
+.journal th { text-align: right; font-weight: 400; color: var(--muted); padding: 8px 14px 2px; }
+.journal th:first-child, .journal td:first-child { text-align: left; }
+.journal td { padding: 4px 14px; text-align: right; }
+.journal tr:last-child td { padding-bottom: 10px; }
+.dr { color: var(--debit); }
+.cr { color: var(--accent); }
+.journal-note { font-family: var(--body); font-size: 13px; color: var(--muted); margin-top: 10px; }
+
+/* Sections */
+section { display: flex; flex-direction: column; gap: 24px; }
+h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
+
+/* Experience ledger */
+.ledger { border-top: 2px solid var(--ink); }
+.entry {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 24px;
+  padding-block: 22px;
+  border-bottom: 1px solid var(--rule);
+}
+.entry .when { font-family: var(--mono); font-size: 13px; color: var(--muted); padding-top: 4px; font-variant-numeric: tabular-nums; }
+.entry .body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.entry h3 { font-size: 20px; font-weight: 700; }
+.entry .org { color: var(--muted); font-size: 15px; }
+.entry ul { margin: 4px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; max-width: 68ch; }
+
+/* Projects */
+.projects { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.project {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  min-width: 0;
+}
+.project.lead { grid-column: 1 / -1; border-color: var(--ink); }
+.project h3 { font-size: 22px; font-weight: 700; }
+.project.lead h3 { font-size: 30px; }
+.project p { color: var(--muted); max-width: 70ch; }
+.project.lead ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; max-width: 70ch; }
+.stack { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.stack span { font-family: var(--mono); font-size: 12px; padding: 2px 8px; background: var(--accent-soft); color: var(--ink); }
+.project .go { display: flex; flex-wrap: wrap; gap: 16px; font-size: 14px; font-weight: 500; }
+
+/* Skills */
+.skills { display: grid; grid-template-columns: 190px minmax(0, 1fr); border-top: 2px solid var(--ink); margin: 0; }
+.skills dt, .skills dd { padding-block: 12px; border-bottom: 1px solid var(--rule); margin: 0; }
+.skills dt { padding-top: 15px; }
+
+/* Education + contact */
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; }
+.two > div { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.school { display: flex; flex-direction: column; gap: 2px; }
+.school strong { font-weight: 600; }
+.school span { color: var(--muted); font-size: 15px; }
+.contact-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-family: var(--mono); font-size: 14px; overflow-wrap: anywhere; }
+.copy { font: 500 12px var(--body); padding: 3px 10px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.copy:hover { border-color: var(--accent); color: var(--accent); }
+
+@media (max-width: 720px) {
+  .wrap { gap: 48px; padding-block: 32px 48px; }
+  .hero, .two { grid-template-columns: minmax(0, 1fr); }
+  .projects { grid-template-columns: minmax(0, 1fr); }
+  .entry { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .skills { grid-template-columns: minmax(0, 1fr); }
+  .skills dt { border-bottom: 0; padding-bottom: 0; }
+  .skills dd { padding-top: 4px; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="hero-text">
+      <p class="label">Software engineer · Mumbai, India</p>
+      <h1>Harisankar Sahoo</h1>
+      <p class="role">I build Node.js services and full-stack web apps for lending, payments and real-time fleet data.</p>
+      <p class="summary">Over four years of experience across fintech lending, EV fleet management, pharma and edtech. I work in JavaScript and TypeScript with Node.js, React, PostgreSQL, ClickHouse, Redis, Kafka and AWS.</p>
+      <div class="links">
+        <a class="btn primary" href="https://github.com/Harisankar2000">GitHub</a>
+        <a class="btn" href="https://www.linkedin.com/in/harisankar-sahoo/">LinkedIn</a>
+        <a class="btn" href="https://neobank-harisankar.vercel.app/">NeoBank live demo</a>
+      </div>
+    </div>
+    <div>
+      <div class="journal" aria-label="Sample journal entry from NeoBank">
+        <header><span>JOURNAL · TRANSFER</span><span>INR</span></header>
+        <table>
+          <tr><th>Account</th><th>Debit</th><th>Credit</th></tr>
+          <tr><td>Sender savings</td><td class="dr">2,500.00</td><td></td></tr>
+          <tr><td>Beneficiary</td><td></td><td class="cr">2,500.00</td></tr>
+        </table>
+        <footer><span>Σ DR = Σ CR</span><span>balanced · posted once</span></footer>
+      </div>
+      <p class="journal-note">Sample entry. In NeoBank every transfer posts like this, and a PostgreSQL trigger rejects any entry that does not balance.</p>
+    </div>
+  </div>
+
+  <section>
+    <h2>Experience</h2>
+    <div class="ledger">
+      <div class="entry">
+        <div class="when">Nov 2024 – Present</div>
+        <div class="body">
+          <h3>Software Engineer (Backend)</h3>
+          <div class="org">Tapsys Private Limited (TapFin) · Mumbai</div>
+          <ul>
+            <li>Built a real-time fleet management system on Fastify, ClickHouse and PostgreSQL. It processes live telemetry from several EV partners and feeds fleet, asset and lender risk dashboards.</li>
+            <li>Designed event-driven pipelines on Kafka and BullMQ for rule-based alerts, device sync and scheduled jobs.</li>
+            <li>Built a central authentication service on Better Auth with multi-tenant organisations, RBAC, OTP login and audit logs. Legacy users moved over without a password reset.</li>
+            <li>Built loan origination APIs from lead through credit, sanction, Key Fact Statement and disbursement.</li>
+            <li>Integrated KYC (PAN, Aadhaar, GST), CRIF credit bureau, penny-drop and e-mandate providers.</li>
+            <li>Wrote the notification service from scratch: email, SMS, WhatsApp, Firebase push, Microsoft Teams and in-app.</li>
+            <li>Built a streaming Excel and CSV export engine with backpressure, async jobs and S3-compatible storage.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="when">Aug 2023 – Oct 2024</div>
+        <div class="body">
+          <h3>Jr. Backend Engineer</h3>
+          <div class="org">Sirovate Technologies Limited (SIRO) · Remote</div>
+          <ul>
+            <li>Built a Clinical Study Report generation tool for a pharmaceutical company, with a multi-stage review workflow on Node.js, AWS Lambda and PostgreSQL.</li>
+            <li>Used S3 for document storage and WebSocket for real-time notifications, and cut the time taken to generate the final report.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="when">Jun 2022 – Jul 2023</div>
+        <div class="body">
+          <h3>Jr. Backend Developer</h3>
+          <div class="org">TimesPro (Times Group) · Mumbai</div>
+          <ul>
+            <li>Built a unified login system on Node.js, AWS Lambda, MongoDB, Cognito, API Gateway, S3 and SNS.</li>
+            <li>Sped up MongoDB reads through query optimisation and indexing.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="entry">
+        <div class="when">Dec 2021 – Jun 2022</div>
+        <div class="body">
+          <h3>Full-Stack Developer Intern</h3>
+          <div class="org">10X Academy · Hyderabad</div>
+          <ul>
+            <li>Built and deployed web apps with Node.js, Express, React and MongoDB, including registration and login with bcrypt and JWT.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Projects</h2>
+    <div class="projects">
+      <article class="project lead">
+        <p class="label">Featured · personal project</p>
+        <h3>NeoBank</h3>
+        <p>A simulated digital bank built on a double-entry ledger: accounts, deposits, beneficiaries, transfers and statements.</p>
+        <ul>
+          <li>Transfers are atomic, concurrency-safe and idempotent, using ordered row locks, deadlock retries and stored Idempotency-Keys. Integration tests run 50 parallel transfers and no account is overdrawn.</li>
+          <li>Daily limits and rule-based fraud checks hold suspicious transfers in a suspense account for admin approval. Reversals never edit history.</li>
+          <li>Events go to Kafka through a transactional outbox, with an idempotent consumer for notifications.</li>
+          <li>React customer app and admin console, with 41 Vitest tests run against real PostgreSQL and Redis.</li>
+        </ul>
+        <div class="stack"><span>TypeScript</span><span>Fastify</span><span>PostgreSQL</span><span>Redis</span><span>Kafka</span><span>React</span><span>Docker</span></div>
+        <div class="go"><a href="https://neobank-harisankar.vercel.app/">Live demo</a><a href="https://github.com/Harisankar2000/neobank">Source on GitHub</a></div>
+      </article>
+      <article class="project">
+        <h3>FlowForge</h3>
+        <p>A distributed job scheduler and DAG workflow engine.</p>
+        <div class="stack"><span>TypeScript</span><span>Fastify</span><span>BullMQ</span><span>Redis</span><span>Prisma</span></div>
+        <div class="go"><a href="https://github.com/Harisankar2000/flowforge">Source on GitHub</a></div>
+      </article>
+      <article class="project">
+        <h3>LinkPulse</h3>
+        <p>A URL shortener with Redis caching, rate limiting and Kafka-based click analytics.</p>
+        <div class="stack"><span>Go</span><span>Redis</span><span>Kafka</span></div>
+        <div class="go"><a href="https://github.com/Harisankar2000/LinkPulse">Source on GitHub</a></div>
+      </article>
+      <article class="project">
+        <h3>Ledgerly</h3>
+        <p>A double-entry payment ledger and wallet service with a Kafka outbox and a React dashboard.</p>
+        <div class="stack"><span>TypeScript</span><span>Fastify</span><span>PostgreSQL</span><span>Kafka</span><span>React</span></div>
+        <div class="go"><a href="https://github.com/Harisankar2000/ledgerly">Source on GitHub</a></div>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Skills</h2>
+    <dl class="skills">
+      <dt class="label">Languages</dt><dd>JavaScript (ES6+), TypeScript, Python, SQL</dd>
+      <dt class="label">Backend and APIs</dt><dd>Node.js, Fastify, Express, FastAPI, REST, GraphQL, WebSocket, Swagger/OpenAPI, Zod</dd>
+      <dt class="label">Frontend</dt><dd>React, HTML, CSS</dd>
+      <dt class="label">Data</dt><dd>PostgreSQL, ClickHouse, MongoDB, Redis, Prisma, Sequelize</dd>
+      <dt class="label">Messaging</dt><dd>Apache Kafka, BullMQ</dd>
+      <dt class="label">Cloud and DevOps</dt><dd>AWS (Lambda, EC2, S3, API Gateway, Cognito, SNS), Docker, Jenkins CI/CD, MinIO</dd>
+      <dt class="label">Auth and security</dt><dd>Better Auth, JWT, OAuth 2.0, RBAC, multi-tenancy, AWS Cognito, SonarQube</dd>
+      <dt class="label">Integrations</dt><dd>KYC (PAN, Aadhaar, GST), CRIF credit bureau, penny drop, e-mandate, WhatsApp/SMS, Firebase</dd>
+      <dt class="label">Testing and tools</dt><dd>Vitest, Postman, ESLint, Prettier, Husky, Git, Jira</dd>
+    </dl>
+  </section>
+
+  <div class="two" id="contact">
+    <div>
+      <h2>Education</h2>
+      <div class="school">
+        <strong>Master of Computer Applications (MCA)</strong>
+        <span>University of Mysore · 2023 – 2025 · CGPA 8.6</span>
+      </div>
+      <div class="school">
+        <strong>Bachelor of Science (BSc)</strong>
+        <span>Utkal University, Bhubaneswar · 2018 – 2021 · CGPA 8.19</span>
+      </div>
+    </div>
+    <div>
+      <h2>Contact</h2>
+      <div class="contact-row"><span id="email">harisankarsahoo58@gmail.com</span><button class="copy" id="copy-email" data-copy="email">Copy</button></div>
+      <div class="contact-row"><span id="phone">+91 8249075719</span><button class="copy" id="copy-phone" data-copy="phone">Copy</button></div>
+      <div class="contact-row"><a href="https://www.linkedin.com/in/harisankar-sahoo/">linkedin.com/in/harisankar-sahoo</a></div>
+      <div class="contact-row"><a href="https://github.com/Harisankar2000">github.com/Harisankar2000</a></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+document.querySelectorAll('.copy').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var el = document.getElementById(btn.dataset.copy);
+    var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500); };
+    var select = function () {
+      var range = document.createRange();
+      range.selectNodeContents(el);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    };
+    try {
+      navigator.clipboard.writeText(el.textContent).then(done, select);
+    } catch (e) {
+      select();
+    }
+  });
+});
+</script>
+</body>
+</html>
