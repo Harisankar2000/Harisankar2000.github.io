@@ -72,6 +72,11 @@ p { margin: 0; }
 h1 { font-size: clamp(40px, 8vw, 76px); font-weight: 700; letter-spacing: -0.02em; }
 .role { font-size: 19px; font-weight: 500; }
 .summary { color: var(--muted); max-width: 58ch; }
+.domains { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.domains li { display: flex; flex-direction: column; gap: 1px; padding: 6px 12px; background: var(--accent-soft); border-left: 3px solid var(--accent); }
+.domains strong { font-weight: 600; font-size: 14px; color: var(--ink); }
+.domains span { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.org .domain { color: var(--accent); font-weight: 500; }
 .links { display: flex; flex-wrap: wrap; gap: 12px; }
 .btn {
   font: 500 14px var(--body);
@@ -179,7 +184,13 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
     <div class="hero-text">
       <p class="label">Software engineer · Mumbai, India</p>
       <h1>Harisankar Sahoo</h1>
-      <p class="role">I build Node.js services and full-stack web apps for lending, payments and real-time fleet data.</p>
+      <p class="role">I build Node.js services and full-stack web apps for fintech lending, EV fleet management, healthcare/pharma and edtech.</p>
+      <ul class="domains" aria-label="Domain experience">
+        <li><strong>Fintech lending</strong><span>TapFin</span></li>
+        <li><strong>EV fleet management</strong><span>TapFin</span></li>
+        <li><strong>Healthcare / pharma</strong><span>SIRO</span></li>
+        <li><strong>Edtech</strong><span>TimesPro · 10X Academy</span></li>
+      </ul>
       <p class="summary">Over four years of experience across fintech lending, EV fleet management, pharma and edtech. I work in JavaScript and TypeScript with Node.js (NestJS, Fastify, Express), React, PostgreSQL, ClickHouse, Redis, Kafka, AWS and Docker, building event-driven microservices, multi-tenant auth and RBAC, loan origination flows and KYC/credit bureau integrations.</p>
       <div class="links">
         <a class="btn primary" href="https://github.com/Harisankar2000">GitHub</a>
@@ -208,7 +219,7 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
         <div class="when">Nov 2024 – Present</div>
         <div class="body">
           <h3>Software Engineer</h3>
-          <div class="org">Tapsys Private Limited (TapFin) · Mumbai</div>
+          <div class="org">Tapsys Private Limited (TapFin) · Mumbai · <span class="domain">Fintech lending, EV fleet</span></div>
           <ul>
             <li>Developed a real-time Fleet Management System (FMS) on Node.js (Fastify), ClickHouse and PostgreSQL that processes live vehicle telemetry from multiple EV partners, including SoC, vehicle status, idling time, charging data, downtime, range analytics and driver scores. It powers the fleet dashboards, the asset passport and the lender portfolio/risk dashboards.</li>
             <li>Designed event-driven pipelines on Apache Kafka and BullMQ/Redis for rule-based alerts, device sync, scheduled jobs and background processing.</li>
@@ -224,7 +235,7 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
         <div class="when">Aug 2023 – Oct 2024</div>
         <div class="body">
           <h3>Jr. Backend Engineer</h3>
-          <div class="org">Sirovate Technologies Limited (SIRO) · Remote</div>
+          <div class="org">Sirovate Technologies Limited (SIRO) · Remote · <span class="domain">Healthcare / pharma</span></div>
           <ul>
             <li>Developed a Clinical Study Report (CSR) generation tool for a pharmaceutical company, integrating multiple document types and streamlining the review and approval process.</li>
             <li>Implemented a multi-stage review workflow with Node.js, AWS Lambda and PostgreSQL, ensuring controlled phase transitions and compliance with industry standards.</li>
@@ -238,7 +249,7 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
         <div class="when">Jun 2022 – Jul 2023</div>
         <div class="body">
           <h3>Jr. Backend Developer</h3>
-          <div class="org">TimesPro (Times Group) · Mumbai</div>
+          <div class="org">TimesPro (Times Group) · Mumbai · <span class="domain">Edtech</span></div>
           <ul>
             <li>Developed a secure, scalable unified login system using Node.js, AWS Lambda, MongoDB, Cognito, API Gateway, S3 and SNS.</li>
             <li>Improved data access and retrieval performance in MongoDB through query optimization and indexing.</li>
@@ -250,7 +261,7 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
         <div class="when">Dec 2021 – Jun 2022</div>
         <div class="body">
           <h3>Full-Stack Developer Intern</h3>
-          <div class="org">10X Academy · Hyderabad</div>
+          <div class="org">10X Academy · Hyderabad · <span class="domain">Edtech</span></div>
           <ul>
             <li>Built and deployed web applications with Node.js, Express.js, React and MongoDB, implementing RESTful APIs and integrating frontend with backend.</li>
             <li>Built registration, login and secure password storage using bcrypt and JWT-based session management, structured with the MVC pattern.</li>
