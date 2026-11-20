@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Portfolio of Harisankar Sahoo, software engineer in Mumbai: Node.js, React, PostgreSQL, Kafka and AWS.">
+<meta name="description" content="Portfolio of Harisankar Sahoo, software engineer in Mumbai: Node.js, NestJS, React, PostgreSQL, Kafka and AWS.">
 <title>Harisankar Sahoo Portfolio</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -180,7 +180,7 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
       <p class="label">Software engineer · Mumbai, India</p>
       <h1>Harisankar Sahoo</h1>
       <p class="role">I build Node.js services and full-stack web apps for lending, payments and real-time fleet data.</p>
-      <p class="summary">Over four years of experience across fintech lending, EV fleet management, pharma and edtech. I work in JavaScript and TypeScript with Node.js, React, PostgreSQL, ClickHouse, Redis, Kafka and AWS.</p>
+      <p class="summary">Over four years of experience across fintech lending, EV fleet management, pharma and edtech. I work in JavaScript and TypeScript with Node.js (NestJS, Fastify, Express), React, PostgreSQL, ClickHouse, Redis, Kafka, AWS and Docker, building event-driven microservices, multi-tenant auth and RBAC, loan origination flows and KYC/credit bureau integrations.</p>
       <div class="links">
         <a class="btn primary" href="https://github.com/Harisankar2000">GitHub</a>
         <a class="btn" href="https://www.linkedin.com/in/harisankar-sahoo/">LinkedIn</a>
@@ -207,7 +207,7 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
       <div class="entry">
         <div class="when">Nov 2024 – Present</div>
         <div class="body">
-          <h3>Software Engineer </h3>
+          <h3>Software Engineer</h3>
           <div class="org">Tapsys Private Limited (TapFin) · Mumbai</div>
           <ul>
             <li>Developed a real-time Fleet Management System (FMS) on Node.js (Fastify), ClickHouse and PostgreSQL that processes live vehicle telemetry from multiple EV partners, including SoC, vehicle status, idling time, charging data, downtime, range analytics and driver scores. It powers the fleet dashboards, the asset passport and the lender portfolio/risk dashboards.</li>
@@ -271,8 +271,8 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
         <ul>
           <li>Transfers are atomic, concurrency-safe and idempotent, using ordered row locks, deadlock retries and stored Idempotency-Keys. Integration tests run 50 parallel transfers and no account is overdrawn.</li>
           <li>Daily limits and rule-based fraud checks hold suspicious transfers in a suspense account for admin approval. Reversals never edit history.</li>
-          <li>Events go to Kafka through a transactional outbox, with an idempotent consumer for notifications.</li>
-          <li>React customer app and admin console, with 41 Vitest tests run against real PostgreSQL and Redis.</li>
+          <li>Events go to Kafka through a transactional outbox, with an idempotent consumer for notifications, plus reconciliation checks, an audit trail and CSV/PDF account statements.</li>
+          <li>React customer app and admin console, with 41 Vitest tests run against real PostgreSQL and Redis. Deployed on Vercel and Render with Neon Postgres and Upstash Redis.</li>
         </ul>
         <div class="stack"><span>TypeScript</span><span>Fastify</span><span>PostgreSQL</span><span>Redis</span><span>Kafka</span><span>React</span><span>Docker</span></div>
         <div class="go"><a href="https://neobank-harisankar.vercel.app/">Live demo</a><a href="https://github.com/Harisankar2000/neobank">Source on GitHub</a></div>
@@ -302,14 +302,15 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
     <h2>Skills</h2>
     <dl class="skills">
       <dt class="label">Languages</dt><dd>JavaScript (ES6+), TypeScript, Python, SQL</dd>
-      <dt class="label">Backend and APIs</dt><dd>Node.js, Fastify, Express, FastAPI, REST, GraphQL, WebSocket, Swagger/OpenAPI, Zod</dd>
-      <dt class="label">Frontend</dt><dd>React, HTML, CSS</dd>
+      <dt class="label">Backend and APIs</dt><dd>Node.js, NestJS, Fastify, Express, FastAPI, REST, GraphQL, WebSocket, Swagger/OpenAPI, Zod</dd>
+      <dt class="label">Frontend</dt><dd>React.js, HTML5, CSS3</dd>
       <dt class="label">Data</dt><dd>PostgreSQL, ClickHouse, MongoDB, Redis, Prisma, Sequelize</dd>
       <dt class="label">Messaging</dt><dd>Apache Kafka, BullMQ</dd>
-      <dt class="label">Cloud and DevOps</dt><dd>AWS (Lambda, EC2, S3, API Gateway, Cognito, SNS), Docker, Jenkins CI/CD, MinIO</dd>
-      <dt class="label">Auth and security</dt><dd>Better Auth, JWT, OAuth 2.0, RBAC, multi-tenancy, AWS Cognito, SonarQube</dd>
+      <dt class="label">Cloud and DevOps</dt><dd>AWS (Lambda, EC2, S3, API Gateway, Cognito, SNS, Step Functions), Docker, Jenkins CI/CD, MinIO</dd>
+      <dt class="label">Auth and security</dt><dd>Better Auth, JWT, OAuth 2.0, RBAC, multi-tenancy, AWS Cognito, bcrypt, SonarQube</dd>
       <dt class="label">Integrations</dt><dd>KYC (PAN, Aadhaar, GST), CRIF credit bureau, penny drop, e-mandate, WhatsApp/SMS, Firebase</dd>
-      <dt class="label">Testing and tools</dt><dd>Vitest, Postman, ESLint, Prettier, Husky, Git, Jira</dd>
+      <dt class="label">Testing and tools</dt><dd>Vitest, Postman, ESLint, Prettier, Husky, Git/GitHub, Jira</dd>
+      <dt class="label">Practices</dt><dd>Microservices, event-driven architecture, Agile/Scrum, SDLC, code reviews, clean code, logging and monitoring</dd>
     </dl>
   </section>
 
@@ -318,7 +319,7 @@ h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
       <h2>Education</h2>
       <div class="school">
         <strong>Master of Computer Applications (MCA)</strong>
-        <span>University of Mysore · 2023 – 2025 · CGPA 8.6</span>
+        <span>University of Mysore (Distance/Online) · 2023 – 2025 · CGPA 8.26</span>
       </div>
       <div class="school">
         <strong>Bachelor of Science (BSc)</strong>
