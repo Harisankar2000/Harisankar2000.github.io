@@ -108,7 +108,7 @@ html{scroll-behavior:smooth}
 <!-- ============ ASKED IN REAL INTERVIEWS ============ -->
 <section id="asked" data-title="Asked in my interviews">
 <h2>Asked in my real interviews</h2>
-<p class="lede">Questions interviewers actually asked (20 Nov 2026). Each answer starts with a short version you can say in about 30 seconds, then the detail to use when they dig deeper.</p>
+<p class="lede">Questions interviewers actually asked (November 2026). Each answer starts with a short version you can say in about 30 seconds, then the detail to use when they dig deeper.</p>
 
 <details><summary><span class="q">One microservice needs to connect to 5 databases. How do you manage that, and what are the optimised ways to do it?</span><span class="tag design">design</span></summary><div class="a">
 <p><strong>Short answer:</strong> "First I'd ask why it needs five. If they are different kinds of store, each doing its own job (Postgres for transactions, ClickHouse for analytics, Redis for cache, and so on), that is normal polyglot persistence. I'd create one connection pool per database at startup, size the pools so they fit the database's connection limits, hide each database behind a repository layer, and keep the data consistent with events instead of distributed transactions. If the service reads other services' databases directly, that is a design smell, and I'd call their APIs instead."</p>
@@ -677,6 +677,357 @@ try {
 </ol>
 <p><strong>What not to do:</strong> read in the app ("is it free?") and then write in a separate statement without a lock. Between the read and the write, another request can take the seat. That's the classic check-then-act race.</p>
 <p><strong>At very high traffic</strong> (flash sales), put a Redis counter (<code>DECR</code>) or a queue in front to reject most requests early, and still let the database be the final judge.</p>
+</div></details>
+
+
+<h3 class="sub">Concurrency, processes and threads</h3>
+
+<details><summary><span class="q">What is multithreading and what is multiprocessing? How does it work in Node.js?</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "Multithreading means one process runs several threads that share the same memory. Threads are cheap to create and share data easily, but shared memory needs locks to stay correct. Multiprocessing means running several separate processes, each with its own memory. They're isolated, so one crash doesn't take down the others, but they're heavier and communicate through messages. Node runs your JavaScript on one main thread, so for CPU-heavy work I use <code>worker_threads</code>, and to use all CPU cores for an API I run several processes (cluster, PM2, or more containers)."</p>
+
+<pre><code>MULTITHREADING (one process)                MULTIPROCESSING (several processes)
+┌───────────────── Process ───────────────┐  ┌── Process 1 ──┐  ┌── Process 2 ──┐
+│  Shared memory (heap, globals)          │  │ own memory    │  │ own memory    │
+│   ▲        ▲        ▲                   │  │   Thread      │  │   Thread      │
+│ Thread 1 Thread 2 Thread 3              │  └──────┬────────┘  └──────┬────────┘
+└─────────────────────────────────────────┘         └── IPC / messages ┘
+ + light, fast to share data                 + isolated, crash-safe, uses all cores
+ - race conditions, needs locks              - heavier, data copied between them</code></pre>
+
+<div class="tw"><table>
+<tr><th></th><th>Multithreading</th><th>Multiprocessing</th></tr>
+<tr><td>Memory</td><td>Shared within the process</td><td>Separate per process</td></tr>
+<tr><td>Creation cost</td><td>Low</td><td>Higher (new OS process, new V8 instance in Node)</td></tr>
+<tr><td>Communication</td><td>Shared variables (fast, needs locks)</td><td>IPC, pipes, sockets, message queues</td></tr>
+<tr><td>Failure</td><td>A crash can kill the whole process</td><td>One process crashing doesn't affect others</td></tr>
+<tr><td>Main risks</td><td>Race conditions, deadlocks</td><td>Memory use, serialisation overhead</td></tr>
+<tr><td>Good for</td><td>CPU work that shares data; servers with many connections (Java, Go)</td><td>Isolation, using all cores, Python CPU work (GIL)</td></tr>
+</table></div>
+
+<p><strong>How Node.js fits:</strong></p>
+<ul>
+<li><strong>Your JavaScript runs on one thread</strong> (the event loop). I/O (network, database, files) doesn't block it: libuv hands the work to the OS or to its <strong>thread pool</strong> (4 threads by default, <code>UV_THREADPOOL_SIZE</code>), used for file system calls, <code>crypto.pbkdf2</code>, <code>bcrypt</code>, <code>zlib</code> and DNS lookups.</li>
+<li><strong>worker_threads</strong> = multithreading. Real threads, each with its own V8 isolate and event loop, talking through <code>postMessage</code> (or <code>SharedArrayBuffer</code> + <code>Atomics</code>). Use for CPU-heavy work: PDF/Excel generation, image resizing, big JSON or CSV parsing, hashing.</li>
+<li><strong>cluster / child_process / PM2 / more containers</strong> = multiprocessing. Several Node processes, often one per CPU core, sharing a port. Used to scale an HTTP API across cores. In Docker or Kubernetes, just run more replicas.</li>
+</ul>
+
+<pre><code>// worker_threads: move CPU work off the event loop
+// main.js
+const { Worker } = require('node:worker_threads');
+function runReport(data) {
+  return new Promise((resolve, reject) =&gt; {
+    const w = new Worker('./report-worker.js', { workerData: data });
+    w.once('message', resolve);
+    w.once('error', reject);
+  });
+}
+app.get('/report', async () =&gt; runReport({ month: '2026-10' }));   // API stays responsive
+
+// report-worker.js
+const { parentPort, workerData } = require('node:worker_threads');
+parentPort.postMessage(buildHugeReport(workerData));            // heavy CPU loop here
+
+// cluster: one process per CPU core, all sharing port 3000
+const cluster = require('node:cluster');
+const os = require('node:os');
+if (cluster.isPrimary) {
+  for (let i = 0; i &lt; os.availableParallelism(); i++) cluster.fork();
+  cluster.on('exit', () =&gt; cluster.fork());                     // restart a crashed worker
+} else {
+  require('./server');                                          // each worker runs the API
+}</code></pre>
+<p>In production, use a pool such as <strong>Piscina</strong> instead of creating a new worker per request, because starting a worker costs time and memory.</p>
+<div class="note">Tie it to your work: "Our export engine is I/O-bound, so streams on the main thread were enough. For CPU-heavy work like generating large Excel files or PDFs, I'd move it into a worker thread pool or a BullMQ worker process so API latency isn't affected."</div>
+</div></details>
+
+<details><summary><span class="q">What is concurrency and what is parallelism? What are the mechanisms or methods for each?</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "Concurrency is <em>dealing with</em> many tasks at once: their lifetimes overlap, but they may take turns on a single core. Parallelism is <em>doing</em> many tasks at the same instant on multiple cores or machines. Node is concurrent by default: one thread handles thousands of requests because it never waits on I/O. For parallelism you add worker threads, more processes or more machines."</p>
+
+<pre><code>Concurrency (1 core, tasks interleave)      Parallelism (several cores, at the same time)
+core 1: A A B B A C C B A ...               core 1: A A A A A
+                                            core 2: B B B B B
+                                            core 3: C C C C C
+
+Analogy: one chef cooking three dishes,     Three chefs, each cooking one dish.
+switching while things simmer.</code></pre>
+
+<p><strong>Mechanisms for concurrency:</strong></p>
+<ul>
+<li><strong>Event loop + non-blocking I/O</strong> (Node.js, Nginx): one thread, callbacks/promises/async-await. Great for I/O-bound work.</li>
+<li><strong>Threads with time-slicing</strong>: the OS switches between threads on one core.</li>
+<li><strong>Coroutines / green threads</strong>: lightweight tasks scheduled by the runtime (Go goroutines, Python asyncio, Kotlin coroutines).</li>
+<li><strong>Message queues</strong> (Kafka, BullMQ, SQS): producers and consumers work independently and at their own speed.</li>
+</ul>
+
+<p><strong>Mechanisms for parallelism:</strong></p>
+<ul>
+<li><strong>Multithreading</strong> on multiple cores (<code>worker_threads</code>, Java threads, Go with GOMAXPROCS).</li>
+<li><strong>Multiprocessing</strong> (cluster, PM2, Python <code>multiprocessing</code>).</li>
+<li><strong>Horizontal scaling</strong>: more containers or pods behind a load balancer; more consumers in a Kafka consumer group (one per partition).</li>
+<li><strong>Data parallelism</strong>: split the data and process chunks at the same time (MapReduce, Spark, ClickHouse running a query on all cores).</li>
+<li><strong>SIMD / GPU</strong>: the same instruction on many values at once.</li>
+</ul>
+
+<p><strong>Controlling concurrency in Node (very commonly asked):</strong></p>
+<pre><code>// Sequential: total time = sum of all calls
+for (const id of ids) await fetchUser(id);
+
+// Unbounded concurrency: fast, but 10,000 at once can overload the DB or hit rate limits
+await Promise.all(ids.map(fetchUser));
+
+// Bounded concurrency: at most 10 in flight at any moment (best for real systems)
+import pLimit from 'p-limit';
+const limit = pLimit(10);
+await Promise.all(ids.map(id =&gt; limit(() =&gt; fetchUser(id))));
+
+// Promise.allSettled: one failure doesn't reject the whole batch
+const results = await Promise.allSettled(ids.map(id =&gt; limit(() =&gt; fetchUser(id))));</code></pre>
+
+<p><strong>Keeping concurrent code correct (synchronisation):</strong></p>
+<ul>
+<li><strong>Mutex / lock</strong>: only one task in a critical section. In databases: <code>SELECT ... FOR UPDATE</code>; across services: a Redis lock.</li>
+<li><strong>Semaphore</strong>: at most N tasks at once (what <code>p-limit</code> or a connection pool does).</li>
+<li><strong>Atomic operations</strong>: <code>Atomics.add</code>, Redis <code>INCR</code>, <code>UPDATE ... SET x = x + 1</code>.</li>
+<li><strong>Immutability and message passing</strong>: share nothing, send messages (worker <code>postMessage</code>, Kafka). Avoids most race conditions.</li>
+<li><strong>Idempotency</strong>: a retried or duplicated task has no extra effect.</li>
+</ul>
+<p><strong>Problems to name:</strong> race conditions, deadlocks, starvation, and overload. Even single-threaded Node has race conditions: two requests can both read a balance before either writes it, because each <code>await</code> lets other code run.</p>
+</div></details>
+
+<h3 class="sub">Data pipeline design</h3>
+
+<details><summary><span class="q">You have 50,000 CSV files in S3. Fetch them, clean the data and write it into a database. How do you design it?</span><span class="tag design">design</span></summary><div class="a">
+<p><strong>Short answer:</strong> "I'd treat each file as one job. A producer lists the files (or S3 event notifications send them) into a queue such as SQS or BullMQ. A pool of workers takes jobs with a concurrency limit, streams each file from S3 without loading it into memory, parses and validates each row, and writes valid rows in batches to a staging table using <code>COPY</code>, then upserts into the final table. A manifest table tracks each file's status, so the job can be resumed and re-run without duplicates. Bad rows go to an error file, failed files go to a dead-letter queue, and everything is measured."</p>
+
+<p><strong>Architecture:</strong></p>
+<pre><code>                ┌────────────────────────┐
+  S3 bucket     │ Producer               │  ListObjectsV2 (paginated, 1000 keys/page)
+  50k CSVs ───► │ or S3 ObjectCreated    │  insert into manifest (status = PENDING)
+  (raw/)        │ events → SQS           │  enqueue { bucket, key, etag }
+                └──────────┬─────────────┘
+                           ▼
+                ┌────────────────────────┐
+                │ Queue: SQS / BullMQ    │  visibility timeout, retries, DLQ
+                └──────────┬─────────────┘
+          ┌────────────────┼────────────────┐        workers scale horizontally
+          ▼                ▼                ▼        (ECS tasks / pods / Lambda)
+   ┌────────────┐   ┌────────────┐   ┌────────────┐
+   │ Worker 1   │   │ Worker 2   │   │ Worker N   │  each: 3–5 files at a time
+   │ stream S3  │   │            │   │            │
+   │ → parse    │   │            │   │            │
+   │ → validate │   │            │   │            │
+   │ → clean    │   │            │   │            │
+   │ → batch    │   │            │   │            │
+   └─────┬──────┘   └─────┬──────┘   └─────┬──────┘
+         │ COPY batches of ~5,000 rows      │ bad rows ──► s3://bucket/errors/&lt;key&gt;.csv
+         ▼                                  ▼
+   ┌───────────────────────────────────────────────┐
+   │ PostgreSQL                                    │
+   │  staging_rows (UNLOGGED) ──► INSERT ... ON    │
+   │  CONFLICT DO UPDATE ──► final table           │
+   │  file_manifest (key, etag, status, counts)    │
+   └───────────────────────────────────────────────┘
+         │
+         ▼  move file to processed/ ; metrics, alerts, summary report</code></pre>
+
+<p><strong>Key design decisions:</strong></p>
+<ol>
+<li><strong>Job = one file.</strong> Small enough to retry on its own. Very large files can be split by byte range, but usually not needed.</li>
+<li><strong>Stream, don't download.</strong> <code>GetObject</code> body → <code>csv-parse</code> stream → transform → database. Memory stays flat even for a 2 GB file, and backpressure stops the reader when the database is slower.</li>
+<li><strong>Validate and clean per row</strong> with a Zod schema: trim spaces, normalise case, parse dates and numbers, convert empty strings to NULL, strip a BOM, standardise phone/PAN formats, drop exact duplicates. Invalid rows are written to an error file with the line number and reason. They don't fail the whole file.</li>
+<li><strong>Batch writes.</strong> Never insert row by row. Use Postgres <code>COPY</code> (fastest) or multi-row <code>INSERT</code> with about 1,000–5,000 rows per batch.</li>
+<li><strong>Staging then merge.</strong> Load into an <code>UNLOGGED</code> staging table, then <code>INSERT ... SELECT ... ON CONFLICT (natural_key) DO UPDATE</code> into the real table in one transaction per file. Partial failures don't leave half a file in the final table.</li>
+<li><strong>Idempotency via a manifest table</strong> keyed by <code>(s3_key, etag)</code>: PENDING → PROCESSING → DONE / FAILED, plus row counts. Re-running the whole job skips DONE files. The upsert on a natural key makes a retried file safe.</li>
+<li><strong>Control concurrency.</strong> Total in flight = workers × files per worker. Size it to the database, not to S3: watch DB CPU, connections and lock waits. S3 handles thousands of requests per second per prefix easily.</li>
+<li><strong>Failures.</strong> Retries with exponential backoff, then a dead-letter queue. A stuck PROCESSING file is picked up again after a timeout (the SQS visibility timeout does this automatically).</li>
+<li><strong>Observability.</strong> Files done/failed per minute, rows per second, rejected-row rate, queue depth, DLQ size. Send a final summary: 50,000 files, X rows loaded, Y rejected.</li>
+<li><strong>Speed-ups for a one-time bulk load:</strong> drop or delay secondary indexes and recreate them after, raise <code>maintenance_work_mem</code>, run <code>ANALYZE</code> at the end.</li>
+</ol>
+
+<p><strong>Worker code (Node.js):</strong></p>
+<pre><code>import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { parse } from 'csv-parse';
+import { from as copyFrom } from 'pg-copy-streams';
+import { pipeline } from 'node:stream/promises';
+import { Transform } from 'node:stream';
+import { z } from 'zod';
+
+const Row = z.object({
+  customer_id: z.string().trim().min(1),
+  email: z.string().trim().toLowerCase().email(),
+  amount: z.coerce.number().nonnegative(),
+  txn_date: z.coerce.date(),
+});
+
+export async function processFile({ bucket, key, etag }) {
+  const claimed = await db.query(
+    `UPDATE file_manifest SET status = 'PROCESSING', started_at = now()
+     WHERE s3_key = $1 AND etag = $2 AND status IN ('PENDING', 'FAILED') RETURNING 1`, [key, etag]);
+  if (!claimed.rowCount) return;                               // already done or taken: idempotent
+
+  const client = await pool.connect();
+  let good = 0, bad = 0;
+  const errors = [];
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM staging_rows WHERE s3_key = $1', [key]);
+
+    const { Body } = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const clean = new Transform({
+      objectMode: true,
+      transform(rec, _enc, cb) {
+        const r = Row.safeParse(rec);
+        if (!r.success) { bad++; errors.push({ line: good + bad, reason: r.error.issues[0].message }); return cb(); }
+        good++;
+        const v = r.data;
+        cb(null, [key, v.customer_id, v.email, v.amount, v.txn_date.toISOString()].join('\t') + '\n');
+      },
+    });
+
+    await pipeline(
+      Body,                                                    // S3 stream
+      parse({ columns: true, bom: true, skip_empty_lines: true, relax_column_count: true }),
+      clean,                                                   // validate + clean + format
+      client.query(copyFrom('COPY staging_rows (s3_key, customer_id, email, amount, txn_date) FROM STDIN')),
+    );
+
+    await client.query(`
+      INSERT INTO transactions (customer_id, email, amount, txn_date)
+      SELECT customer_id, email, amount, txn_date FROM staging_rows WHERE s3_key = $1
+      ON CONFLICT (customer_id, txn_date) DO UPDATE SET amount = EXCLUDED.amount, email = EXCLUDED.email`, [key]);
+    await client.query('DELETE FROM staging_rows WHERE s3_key = $1', [key]);
+    await client.query(
+      `UPDATE file_manifest SET status = 'DONE', rows_ok = $2, rows_bad = $3, finished_at = now() WHERE s3_key = $1`,
+      [key, good, bad]);
+    await client.query('COMMIT');
+    if (errors.length) await writeErrorReport(bucket, key, errors);   // s3://bucket/errors/...
+  } catch (err) {
+    await client.query('ROLLBACK');
+    await db.query(`UPDATE file_manifest SET status = 'FAILED', error = $2 WHERE s3_key = $1`, [key, err.message]);
+    throw err;                                                 // queue retries, then DLQ
+  } finally {
+    client.release();
+  }
+}
+
+// BullMQ worker: 4 files at a time per process; run several processes or containers
+new Worker('csv-files', job =&gt; processFile(job.data), { connection, concurrency: 4 });</code></pre>
+
+<p><strong>Choosing where it runs:</strong></p>
+<div class="tw"><table>
+<tr><th>Option</th><th>Good when</th><th>Watch out</th></tr>
+<tr><td>Lambda triggered by SQS</td><td>Files are small to medium, bursty arrivals, no servers to manage</td><td>15-minute limit, set reserved concurrency so you don't flood the DB, use RDS Proxy</td></tr>
+<tr><td>ECS / Kubernetes workers + SQS or BullMQ</td><td>Large files, steady load, full control (my default)</td><td>Autoscale on queue depth</td></tr>
+<tr><td>AWS Glue / Spark / Step Functions Distributed Map</td><td>Terabytes, heavy transformations, data-team tooling</td><td>More cost and complexity</td></tr>
+<tr><td>Single script with p-limit</td><td>One-off migration, data fits in hours</td><td>No resume unless you add the manifest table</td></tr>
+</table></div>
+
+<p><strong>Rough sizing to mention:</strong> if a file has 10,000 rows, that's 500 million rows in total. At 50,000 rows per second with <code>COPY</code>, that's about 3 hours. With row-by-row inserts at 1,000 per second it would take about 6 days, which is why batching matters.</p>
+<div class="note">Tie it to your work: "It's the reverse of my export engine at TapFin: same ideas of streaming with backpressure, async jobs in BullMQ, and S3-compatible storage, but for import. In the FMS I also normalised data from different EV partners into one schema before writing it, which is the same 'clean and validate' step."</div>
+</div></details>
+
+<h3 class="sub">Docker and process</h3>
+
+<details><summary><span class="q">What is Docker mainly used for? Is it only for deployment?</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "No, deployment is only one use. Docker packages an app with its runtime, libraries and config into an image that runs the same everywhere. That helps across the whole lifecycle: the same local setup for every developer, spinning up Postgres, Redis and Kafka with one command, running integration tests against real databases, reproducible CI builds, isolating services on one machine, and shipping the exact same image to staging and production."</p>
+
+<pre><code>             build once                       run the same image everywhere
+ Dockerfile ───────────► Image (app + Node 20 + libs) ─┬─► Developer laptop (docker compose)
+                          tagged by git SHA, pushed     ├─► CI: tests in containers
+                          to ECR / Docker Hub           ├─► Staging
+                                                        └─► Production (ECS / Kubernetes / EC2)</code></pre>
+
+<p><strong>Main uses:</strong></p>
+<ol>
+<li><strong>Consistent environments.</strong> Ends "works on my machine". Same Node version, same OS libraries, same config on every laptop and server.</li>
+<li><strong>Local development.</strong> <code>docker compose up</code> starts the app plus Postgres, Redis, Kafka, MinIO. New developers are productive on day one without installing each one.</li>
+<li><strong>Testing.</strong> Integration tests against real databases in throwaway containers (Testcontainers, or a compose file in CI). Each run starts clean.</li>
+<li><strong>CI/CD.</strong> Jenkins or GitHub Actions builds the image once; that exact image is tested and promoted. Builds are reproducible.</li>
+<li><strong>Deployment and rollback.</strong> Deploy = run image <code>v1.4.2</code>. Rollback = run <code>v1.4.1</code> again.</li>
+<li><strong>Isolation.</strong> Several services with different Node or Python versions on one host without conflicts; limits on CPU and memory per container (cgroups).</li>
+<li><strong>Scaling and microservices.</strong> Each service is its own image; orchestrators (ECS, Kubernetes) run more copies when load grows.</li>
+<li><strong>Running tools without installing them.</strong> <code>docker run --rm postgres:16 pg_dump ...</code>, a one-off migration job, or a scheduled batch job.</li>
+<li><strong>Trying things safely.</strong> Test a new database version or an untrusted script in a container and throw it away.</li>
+</ol>
+
+<p><strong>Example: local stack with Docker Compose.</strong></p>
+<pre><code># docker-compose.yml
+services:
+  api:
+    build: .
+    ports: ["3000:3000"]
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_started }
+  postgres:
+    image: postgres:16
+    environment: { POSTGRES_PASSWORD: dev, POSTGRES_DB: app }
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD", "pg_isready", "-U", "postgres"], interval: 5s }
+  redis:
+    image: redis:7
+  minio:
+    image: minio/minio
+    command: server /data
+    ports: ["9000:9000"]
+volumes:
+  pgdata:</code></pre>
+
+<p><strong>Example: production image (multi-stage, small, non-root).</strong></p>
+<pre><code>FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY --from=build /app/dist ./dist
+USER node
+EXPOSE 3000
+CMD ["node", "dist/server.js"]</code></pre>
+
+<p><strong>Terms to know:</strong> image (read-only template, built in layers) vs container (a running instance of an image); Dockerfile; registry (ECR, Docker Hub); volume (data that survives the container); network; layer caching (copy <code>package.json</code> and install before copying source, so code changes don't reinstall dependencies). Container vs VM: containers share the host kernel and start in seconds; VMs run a full guest OS.</p>
+<div class="note">Tie it to your work: "At TapFin we used Docker multi-stage builds with Jenkins CI/CD, and docker compose locally for Postgres, Redis, Kafka and MinIO. NeoBank's integration tests run against real Postgres and Redis containers."</div>
+</div></details>
+
+<details><summary><span class="q">What is the Waterfall model? How is it different from Agile?</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "Waterfall is a sequential software development model: requirements, design, implementation, testing, deployment and maintenance happen one after another, and each phase is finished and signed off before the next starts, like water flowing down steps. It works when requirements are fixed and well understood, but changes late in the project are expensive. Agile does the same activities in short iterations and delivers working software every sprint."</p>
+
+<pre><code>Requirements ─┐
+              ▼
+           Design ─┐
+                   ▼
+          Implementation ─┐
+                          ▼
+                       Testing ─┐
+                                ▼
+                           Deployment ─┐
+                                       ▼
+                                  Maintenance
+ (each phase produces a signed-off document; going back up is costly)</code></pre>
+
+<div class="tw"><table>
+<tr><th></th><th>Waterfall</th><th>Agile (Scrum / Kanban)</th></tr>
+<tr><td>Flow</td><td>Linear, one pass</td><td>Iterative, short cycles (1–2 week sprints)</td></tr>
+<tr><td>Requirements</td><td>Fixed up front</td><td>Evolve; backlog reprioritised every sprint</td></tr>
+<tr><td>Delivery</td><td>One big release at the end</td><td>Working increment every sprint</td></tr>
+<tr><td>Testing</td><td>A separate phase after coding</td><td>Continuous, within each sprint</td></tr>
+<tr><td>Customer involvement</td><td>Mostly at the start and end</td><td>Throughout (sprint reviews)</td></tr>
+<tr><td>Cost of change</td><td>High, especially late</td><td>Low</td></tr>
+<tr><td>Documentation</td><td>Heavy</td><td>Just enough</td></tr>
+<tr><td>Risk</td><td>Problems found late</td><td>Problems found early</td></tr>
+</table></div>
+
+<p><strong>When Waterfall fits:</strong> fixed scope and budget contracts, strict regulation needing full documentation and sign-offs (medical devices, government, some banking compliance), hardware or embedded projects, small well-understood projects.</p>
+<p><strong>When Agile fits:</strong> products where requirements change, startups, anything needing fast feedback from users.</p>
+<p><strong>Related models:</strong> V-model (Waterfall with a matching test phase for each design phase), Spiral (risk-driven iterations), Incremental, and hybrid "water-scrum-fall".</p>
+<div class="note">Tie it to your work: "All my teams used Agile Scrum: sprint planning, story grooming, daily stand-ups and retrospectives. At SIRO the pharma domain had Waterfall-like elements, with formal review and approval stages and compliance documentation, even though development ran in sprints."</div>
 </div></details>
 
 </section>
