@@ -389,6 +389,296 @@ await app.listen(3000, '0.0.0.0');</code></pre>
 <div class="note">If asked "why Fastify and not Nest at TapFin?": "Our services are small and focused, throughput matters for telemetry ingestion, and Fastify's plugins, hooks and JSON Schema validation already gave us enough structure. For a big monolith or a large team, I'd pick Nest with the Fastify adapter to get both structure and speed."</div>
 </div></details>
 
+
+<h3 class="sub">Indexing: composite and partial indexes</h3>
+
+<details><summary><span class="q">What is a composite index? How do you choose the column order?</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "A composite (multi-column) index is one B-tree index on several columns, sorted by the first column, then by the second inside it, and so on, like a phone book sorted by surname then first name. It helps any query that uses a <em>leftmost prefix</em> of its columns. I put equality columns first, then the range or sort column, so one index can both filter and return rows already in order."</p>
+
+<pre><code>CREATE INDEX idx_loans_org_status_created
+  ON loans (org_id, status, created_at DESC);</code></pre>
+
+<div class="tw"><table>
+<tr><th>Query</th><th>Uses the index?</th><th>Why</th></tr>
+<tr><td><code>WHERE org_id = 7</code></td><td>Yes</td><td>Leftmost column</td></tr>
+<tr><td><code>WHERE org_id = 7 AND status = 'PENDING'</code></td><td>Yes</td><td>Leftmost two columns</td></tr>
+<tr><td><code>WHERE org_id = 7 AND status = 'PENDING' ORDER BY created_at DESC LIMIT 20</code></td><td>Yes, best case</td><td>Filters and reads rows already sorted. No separate sort step.</td></tr>
+<tr><td><code>WHERE org_id = 7 AND created_at &gt; now() - interval '7 days'</code></td><td>Partly</td><td>Uses <code>org_id</code>, then scans all statuses within that org</td></tr>
+<tr><td><code>WHERE status = 'PENDING'</code></td><td>Usually no</td><td>Skips the leading column. Postgres may do a full index scan, which is rarely worth it.</td></tr>
+<tr><td><code>WHERE created_at &gt; ...</code></td><td>No</td><td>Skips the leading columns</td></tr>
+</table></div>
+
+<p><strong>Rules for column order:</strong></p>
+<ol>
+<li><strong>Equality columns first</strong> (<code>=</code>, <code>IN</code>), then <strong>one range or sort column</strong> last (<code>&gt;</code>, <code>BETWEEN</code>, <code>ORDER BY</code>). After a range column, later columns can't be used for seeking.</li>
+<li>Among equality columns, put the one <strong>every query has</strong> first (often <code>org_id</code> in a multi-tenant app), so more queries can share the index.</li>
+<li>Match the sort direction your query uses (<code>created_at DESC</code>) if it mixes directions, e.g. <code>ORDER BY a ASC, b DESC</code>.</li>
+</ol>
+
+<p><strong>Covering index (index-only scan):</strong> add extra columns that are only returned, not filtered, with <code>INCLUDE</code>. Postgres can then answer from the index without visiting the table.</p>
+<pre><code>CREATE INDEX idx_loans_org_status_cov
+  ON loans (org_id, status) INCLUDE (amount, customer_id);
+
+-- answered from the index alone (if the visibility map is up to date)
+SELECT amount, customer_id FROM loans WHERE org_id = 7 AND status = 'SANCTIONED';</code></pre>
+
+<p><strong>Composite vs separate single-column indexes:</strong> with separate indexes on <code>org_id</code> and <code>status</code>, Postgres can combine them with a <em>BitmapAnd</em>, but that is slower than one composite index and can't give sorted output. Composite wins for a frequent, known query pattern. Separate indexes are more flexible for ad-hoc filters.</p>
+
+<p><strong>Costs:</strong> every index slows down <code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code>, uses disk and memory, and prevents HOT updates when an indexed column changes. An index on <code>(a, b)</code> already covers queries on <code>a</code> alone, so a separate index on <code>a</code> is redundant. Check usage with <code>pg_stat_user_indexes.idx_scan</code> and drop indexes nobody uses.</p>
+
+<p><strong>Prove it with EXPLAIN:</strong></p>
+<pre><code>EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM loans WHERE org_id = 7 AND status = 'PENDING'
+ORDER BY created_at DESC LIMIT 20;
+-- good:  Index Scan using idx_loans_org_status_created ... (no Sort node)
+-- bad:   Seq Scan on loans ... -&gt; Sort</code></pre>
+<p><strong>Prisma:</strong> <code>@@index([orgId, status, createdAt(sort: Desc)])</code> in the model.</p>
+<div class="note">Tie it to your work: "In the LOS, the list screens always filter by org and stage and sort by newest, so the index was <code>(org_id, stage, created_at DESC)</code>. In the FMS, the ClickHouse <code>ORDER BY (vehicle_id, ts)</code> sorting key follows the same leftmost-prefix idea."</div>
+</div></details>
+
+<details><summary><span class="q">What is a partial index? Give real examples.</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "A partial index has a <code>WHERE</code> clause, so it only contains the rows that match. It's smaller, faster to scan and cheaper to maintain than indexing the whole table. I use it when queries only ever look at a small, well-defined subset, like pending jobs or rows that aren't soft-deleted, and for conditional uniqueness rules."</p>
+
+<p><strong>Example 1: hot subset.</strong> A <code>jobs</code> table has 50 million rows, but only a few thousand are <code>PENDING</code>. Workers only ever query the pending ones.</p>
+<pre><code>CREATE INDEX idx_jobs_pending ON jobs (run_at) WHERE status = 'PENDING';
+
+-- uses the tiny index
+SELECT * FROM jobs WHERE status = 'PENDING' AND run_at &lt;= now()
+ORDER BY run_at LIMIT 100 FOR UPDATE SKIP LOCKED;</code></pre>
+
+<p><strong>Example 2: unique only among live rows (soft delete).</strong> Email must be unique, but a deleted user's email can be reused.</p>
+<pre><code>CREATE UNIQUE INDEX uq_users_email_live ON users (lower(email)) WHERE deleted_at IS NULL;</code></pre>
+
+<p><strong>Example 3: business rule enforced by the database.</strong> A customer can have only one active loan application at a time.</p>
+<pre><code>CREATE UNIQUE INDEX uq_one_active_loan ON loan_applications (customer_id)
+  WHERE status IN ('LEAD', 'CREDIT', 'QC', 'SANCTION');
+-- a second active application fails with 23505 unique_violation, even if two requests race</code></pre>
+
+<p><strong>Example 4: skip NULLs or a dominant value.</strong> <code>CREATE INDEX ON payments (failure_code) WHERE failure_code IS NOT NULL;</code> If 99% of rows are NULL, indexing them is wasted space.</p>
+
+<p><strong>The catch:</strong> the planner only uses a partial index if it can prove the query's <code>WHERE</code> implies the index's predicate. <code>WHERE status = 'PENDING'</code> works. <code>WHERE status = $1</code> with a generic prepared-statement plan may not, because the planner doesn't know the value. Write the condition literally, or check with <code>EXPLAIN</code>.</p>
+
+<p><strong>Other index types worth naming:</strong> expression index (<code>ON users (lower(email))</code>), GIN for JSONB, arrays and full-text search, BRIN for huge append-only tables ordered by time (tiny, good for telemetry logs in Postgres), hash for equality only.</p>
+<p><strong>Prisma note:</strong> Prisma's schema doesn't express partial indexes everywhere, so add them in a SQL migration (<code>prisma migrate dev --create-only</code>, then edit the SQL).</p>
+</div></details>
+
+<details><summary><span class="q">How do you add an index to a big production table without downtime?</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "A plain <code>CREATE INDEX</code> takes a SHARE lock that blocks all writes until it finishes, which can take minutes on a big table. I use <code>CREATE INDEX CONCURRENTLY</code>: it builds without blocking writes, takes longer, and can't run inside a transaction. If it fails it leaves an INVALID index that I drop and retry."</p>
+<pre><code>SET lock_timeout = '5s';
+CREATE INDEX CONCURRENTLY idx_loans_org_status ON loans (org_id, status);
+
+-- check for a failed build
+SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;
+DROP INDEX CONCURRENTLY idx_loans_org_status;   -- then retry</code></pre>
+<p>Same idea for other schema changes: <code>ALTER TABLE</code> takes an ACCESS EXCLUSIVE lock. Set <code>lock_timeout</code> so a migration waiting behind a long query doesn't freeze every other query queued behind it. Add constraints as <code>NOT VALID</code>, then <code>VALIDATE CONSTRAINT</code> separately.</p>
+</div></details>
+
+<h3 class="sub">Locking and deadlocks</h3>
+
+<details><summary><span class="q">What types of locks are there in PostgreSQL? Explain with examples.</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "There are three families. Table-level locks, which every statement takes automatically and which matter mostly for DDL. Row-level locks, taken by <code>UPDATE</code>, <code>DELETE</code> and <code>SELECT ... FOR UPDATE/SHARE</code>. And advisory locks, which the application takes on a number it chooses. Because of MVCC, plain reads take no row locks: readers never block writers and writers never block readers."</p>
+
+<p><strong>1. Shared vs exclusive: the basic idea.</strong> A shared (S) lock lets many transactions read together. An exclusive (X) lock lets only one transaction change the data. S is compatible with S. X conflicts with everything.</p>
+
+<p><strong>2. Row-level locks</strong> (strongest to weakest):</p>
+<div class="tw"><table>
+<tr><th>Lock</th><th>Taken by</th><th>Blocks</th></tr>
+<tr><td><code>FOR UPDATE</code></td><td><code>DELETE</code>, <code>UPDATE</code> of a key column, <code>SELECT ... FOR UPDATE</code></td><td>All other row locks and writes on that row</td></tr>
+<tr><td><code>FOR NO KEY UPDATE</code></td><td>Plain <code>UPDATE</code> of non-key columns</td><td>Other updates and FOR SHARE, but not FOR KEY SHARE (so FK checks still pass)</td></tr>
+<tr><td><code>FOR SHARE</code></td><td><code>SELECT ... FOR SHARE</code></td><td>Writers. Other FOR SHARE readers can share it.</td></tr>
+<tr><td><code>FOR KEY SHARE</code></td><td>Foreign key checks: inserting a child row locks the parent row this way</td><td>Only deleting the parent or changing its key</td></tr>
+</table></div>
+
+<p><strong>3. Table-level locks</strong> (the ones worth naming):</p>
+<div class="tw"><table>
+<tr><th>Lock mode</th><th>Taken by</th><th>Conflicts with</th></tr>
+<tr><td>ACCESS SHARE</td><td><code>SELECT</code></td><td>Only ACCESS EXCLUSIVE</td></tr>
+<tr><td>ROW EXCLUSIVE</td><td><code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code></td><td>SHARE and stronger (so a plain <code>CREATE INDEX</code> blocks writes)</td></tr>
+<tr><td>SHARE UPDATE EXCLUSIVE</td><td><code>VACUUM</code>, <code>ANALYZE</code>, <code>CREATE INDEX CONCURRENTLY</code></td><td>Itself and stronger</td></tr>
+<tr><td>SHARE</td><td><code>CREATE INDEX</code> (non-concurrent)</td><td>Writes</td></tr>
+<tr><td>ACCESS EXCLUSIVE</td><td><code>ALTER TABLE</code>, <code>DROP</code>, <code>TRUNCATE</code>, <code>VACUUM FULL</code></td><td>Everything, even plain <code>SELECT</code></td></tr>
+</table></div>
+
+<p><strong>4. Advisory locks:</strong> application-defined locks on a number, not tied to a row.</p>
+<pre><code>-- only one pod runs the weekly portfolio email job
+SELECT pg_try_advisory_lock(hashtext('weekly-portfolio-email'));  -- true for one caller, false for the rest
+-- ... do the work ...
+SELECT pg_advisory_unlock(hashtext('weekly-portfolio-email'));
+
+-- transaction-scoped version, released automatically at COMMIT/ROLLBACK
+SELECT pg_advisory_xact_lock(hashtext('loan:' || $1));</code></pre>
+
+<p><strong>Example of the lock queue trap:</strong> a long <code>SELECT</code> holds ACCESS SHARE. A migration's <code>ALTER TABLE</code> asks for ACCESS EXCLUSIVE and waits. Now every new <code>SELECT</code> queues behind the <code>ALTER</code>, and the table looks down. That's why migrations set <code>lock_timeout</code>.</p>
+</div></details>
+
+<details><summary><span class="q">Pessimistic vs optimistic locking. When do you use each? Show code.</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "Pessimistic locking locks the row before changing it (<code>SELECT ... FOR UPDATE</code>), so others wait. I use it when conflicts are likely and a wrong result is expensive, like money movement. Optimistic locking doesn't lock: each row has a version number, and the update only succeeds if the version hasn't changed since I read it. If it fails, I reload and retry or return 409. I use it when conflicts are rare, like editing a profile or a loan draft."</p>
+
+<p><strong>Pessimistic: debit a wallet.</strong></p>
+<pre><code>BEGIN;
+SELECT balance FROM accounts WHERE id = $1 FOR UPDATE;   -- others trying to lock this row wait here
+-- app checks balance &gt;= amount
+UPDATE accounts SET balance = balance - $2 WHERE id = $1;
+COMMIT;                                                   -- lock released</code></pre>
+
+<p><strong>Optimistic: approve a loan with a version column.</strong></p>
+<pre><code>// Prisma: the update only matches if nobody changed the row since we read it
+const res = await prisma.loan.updateMany({
+  where: { id, version: loan.version, stage: 'SANCTION' },
+  data:  { stage: 'APPROVED', approvedBy: userId, version: { increment: 1 } },
+});
+if (res.count === 0) throw new ConflictError('Loan was changed by someone else. Reload and try again.');</code></pre>
+
+<div class="tw"><table>
+<tr><th></th><th>Pessimistic</th><th>Optimistic</th></tr>
+<tr><td>How</td><td>Lock first (<code>FOR UPDATE</code>)</td><td>Check a version or timestamp at write time</td></tr>
+<tr><td>Best when</td><td>High contention, money, inventory, seats</td><td>Low contention, long user edits, APIs across HTTP requests</td></tr>
+<tr><td>Cost</td><td>Waiting, possible deadlocks, held connections</td><td>Retries or 409s under contention</td></tr>
+<tr><td>Across HTTP requests?</td><td>No: never hold a DB lock while a user thinks</td><td>Yes: send the version to the client, use ETag / If-Match</td></tr>
+</table></div>
+
+<p><strong>Often the simplest fix needs no explicit lock at all:</strong> an atomic conditional update.</p>
+<pre><code>UPDATE accounts SET balance = balance - 500
+WHERE id = $1 AND balance &gt;= 500
+RETURNING balance;     -- 0 rows returned = insufficient funds, no race possible</code></pre>
+<div class="note">Tie it to your work: "In the LOS, stage transitions use a conditional update on the current stage, so two approvers clicking at the same time can't both succeed. In NeoBank, transfers use pessimistic <code>FOR UPDATE</code> because they touch two accounts and money must never go wrong."</div>
+</div></details>
+
+<details><summary><span class="q">What is a deadlock? Walk through an example and how you prevent it.</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "A deadlock is when two transactions each hold a lock the other one needs, so both wait forever. Postgres checks for this cycle after <code>deadlock_timeout</code> (1 second by default), kills one transaction with error <code>40P01</code>, and lets the other finish. I prevent it by always locking rows in the same order, keeping transactions short, and retrying the transaction that got killed."</p>
+
+<p><strong>Step by step: two opposite transfers.</strong> A sends 100 to B while B sends 50 to A.</p>
+<div class="tw"><table>
+<tr><th>Time</th><th>Transaction 1 (A → B)</th><th>Transaction 2 (B → A)</th></tr>
+<tr><td>t1</td><td><code>UPDATE accounts SET balance = balance - 100 WHERE id = 'A';</code><br>locks row A</td><td></td></tr>
+<tr><td>t2</td><td></td><td><code>UPDATE accounts SET balance = balance - 50 WHERE id = 'B';</code><br>locks row B</td></tr>
+<tr><td>t3</td><td><code>UPDATE ... WHERE id = 'B';</code><br>waits for T2</td><td></td></tr>
+<tr><td>t4</td><td></td><td><code>UPDATE ... WHERE id = 'A';</code><br>waits for T1 → cycle</td></tr>
+<tr><td>t5</td><td>continues and commits</td><td><code>ERROR: deadlock detected</code> (40P01), rolled back</td></tr>
+</table></div>
+
+<p><strong>The four conditions</strong> (all must hold for a deadlock): mutual exclusion, hold and wait, no preemption, circular wait. In practice you break <em>circular wait</em> with a consistent lock order.</p>
+
+<p><strong>Prevention:</strong></p>
+<ol>
+<li><strong>Lock in a fixed order.</strong> Sort IDs and lock them all up front.
+<pre><code>SELECT id FROM accounts WHERE id IN ($1, $2) ORDER BY id FOR UPDATE;</code></pre>
+Now both transfers try to lock A first. The second one simply waits; there's no cycle.</li>
+<li><strong>Keep transactions short.</strong> No HTTP calls, KYC requests or Kafka publishes inside a transaction. Use the outbox for events.</li>
+<li><strong>Multi-row updates in a fixed order too.</strong> <code>UPDATE ... WHERE id IN (...)</code> locks rows in whatever order it scans them. If two batch jobs overlap, lock first with <code>SELECT ... ORDER BY id FOR UPDATE</code>.</li>
+<li><strong>Lock the strongest level you'll need up front.</strong> Taking <code>FOR SHARE</code> and later upgrading to <code>FOR UPDATE</code> deadlocks when two transactions do it at once.</li>
+<li><strong>Index foreign keys and the columns in <code>UPDATE ... WHERE</code></strong>, so statements lock only the rows they need, not large scanned ranges.</li>
+<li><strong>Use timeouts</strong> so nothing waits forever: <code>lock_timeout</code>, <code>statement_timeout</code>, <code>idle_in_transaction_session_timeout</code>.</li>
+</ol>
+
+<p><strong>Handling: retry with backoff.</strong> A deadlock or serialization failure means "try again", not "fail the request".</p>
+<pre><code>async function withRetry(fn, attempts = 3) {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const retryable = err.code === '40P01' || err.code === '40001'; // deadlock, serialization failure
+      if (!retryable || i &gt;= attempts) throw err;
+      await new Promise(r =&gt; setTimeout(r, 20 * 2 ** i + Math.random() * 20)); // jittered backoff
+    }
+  }
+}
+
+await withRetry(() =&gt; prisma.$transaction(async (tx) =&gt; {
+  await tx.$queryRaw`SELECT id FROM accounts WHERE id IN (${from}, ${to}) ORDER BY id FOR UPDATE`;
+  await tx.$executeRaw`UPDATE accounts SET balance = balance - ${amt} WHERE id = ${from}`;
+  await tx.$executeRaw`UPDATE accounts SET balance = balance + ${amt} WHERE id = ${to}`;
+}));</code></pre>
+<p>Retry the <strong>whole transaction</strong>, never just the failed statement: the database already rolled back everything. Make it idempotent (Idempotency-Key) so a retry after a timeout can't double-post.</p>
+<div class="note">Tie it to your work: "NeoBank locks both accounts by ascending ID, retries 40P01 and 40001 with jitter, and an integration test fires 50 parallel transfers, including opposite pairs, to prove nothing deadlocks permanently or overdraws."</div>
+</div></details>
+
+<details><summary><span class="q">Can a deadlock happen without explicit locks, for example on INSERT or foreign keys?</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "Yes. Every <code>UPDATE</code> and <code>DELETE</code> locks rows implicitly, foreign key checks take <code>FOR KEY SHARE</code> on the parent row, and inserts into a unique index wait on each other when they insert the same key. So two ordinary-looking transactions can deadlock."</p>
+<p><strong>Unique index example:</strong></p>
+<pre><code>T1: INSERT INTO wallets (user_id) VALUES (1);   -- ok
+T2: INSERT INTO wallets (user_id) VALUES (2);   -- ok
+T1: INSERT INTO wallets (user_id) VALUES (2);   -- waits: T2 might commit user 2
+T2: INSERT INTO wallets (user_id) VALUES (1);   -- waits for T1 → deadlock</code></pre>
+<p>Fix: insert in sorted key order, or use <code>INSERT ... ON CONFLICT DO NOTHING</code> for idempotent upserts.</p>
+<p><strong>Foreign key example:</strong></p>
+<pre><code>T1: INSERT INTO repayments (loan_id, ...) VALUES (10, ...);  -- FOR KEY SHARE on loan 10
+T2: INSERT INTO repayments (loan_id, ...) VALUES (20, ...);  -- FOR KEY SHARE on loan 20
+T1: DELETE FROM loans WHERE id = 20;                         -- needs FOR UPDATE on loan 20: waits for T2
+T2: DELETE FROM loans WHERE id = 10;                         -- waits for T1 → deadlock</code></pre>
+<p>Plain updates of non-key columns take <code>FOR NO KEY UPDATE</code>, which does not conflict with FK checks. So this mostly bites when parents are deleted or their keys change, and when the FK column on the child table has no index (the delete then has to scan the child table).</p>
+<p><strong>Other hidden causes:</strong> triggers that update another table, ORMs that update rows in a different order per request, and <code>SELECT ... FOR UPDATE</code> without <code>ORDER BY</code>.</p>
+</div></details>
+
+<details><summary><span class="q">How do you find and debug locking problems or deadlocks in production?</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "Turn on <code>log_lock_waits</code> so slow lock waits are logged, and read the deadlock entries in the Postgres log, which show both queries. When something is blocked right now, query <code>pg_stat_activity</code> with <code>pg_blocking_pids()</code> to see who is blocking whom, and look for sessions that are idle in transaction."</p>
+<pre><code>-- who is blocked, and by whom
+SELECT a.pid, a.state, now() - a.xact_start AS tx_age,
+       pg_blocking_pids(a.pid) AS blocked_by, left(a.query, 80) AS query
+FROM pg_stat_activity a
+WHERE cardinality(pg_blocking_pids(a.pid)) &gt; 0;
+
+-- long-running or forgotten transactions holding locks
+SELECT pid, state, now() - xact_start AS age, left(query, 80)
+FROM pg_stat_activity
+WHERE state IN ('idle in transaction', 'active') AND xact_start &lt; now() - interval '1 minute'
+ORDER BY age DESC;
+
+-- last resort
+SELECT pg_cancel_backend(12345);     -- cancel the query
+SELECT pg_terminate_backend(12345);  -- kill the session</code></pre>
+<p><strong>Settings to mention:</strong> <code>log_lock_waits = on</code> (logs waits longer than <code>deadlock_timeout</code>), <code>deadlock_timeout = 1s</code>, <code>lock_timeout</code>, <code>statement_timeout</code>, <code>idle_in_transaction_session_timeout</code> (kills sessions that opened a transaction and forgot to commit, a common Node bug when an error skips <code>ROLLBACK</code> and the client goes back to the pool).</p>
+<p><strong>Metrics:</strong> count of 40P01 errors, lock wait time, and pool "waiting" counts in your dashboards.</p>
+</div></details>
+
+<details><summary><span class="q">Several workers pick jobs from one table. How do you stop two workers taking the same job? (SKIP LOCKED / NOWAIT)</span><span class="tag theory">theory</span></summary><div class="a">
+<p><strong>Short answer:</strong> "<code>SELECT ... FOR UPDATE SKIP LOCKED</code>. Each worker locks a batch of rows and skips rows another worker already locked, so workers never wait on each other and never take the same job. <code>NOWAIT</code> is different: instead of skipping, it fails at once if the row is locked, which suits 'someone else is editing this' screens."</p>
+<pre><code>BEGIN;
+SELECT id, payload FROM jobs
+WHERE status = 'PENDING' AND run_at &lt;= now()
+ORDER BY run_at
+LIMIT 10
+FOR UPDATE SKIP LOCKED;          -- worker 1 gets jobs 1-10, worker 2 gets 11-20, nobody blocks
+UPDATE jobs SET status = 'RUNNING', locked_by = $worker, locked_at = now() WHERE id = ANY($ids);
+COMMIT;                          -- do the actual work outside this short transaction
+
+-- NOWAIT: fail fast
+SELECT * FROM loans WHERE id = $1 FOR UPDATE NOWAIT;  -- error 55P03 lock_not_available if busy</code></pre>
+<p>Pair it with the partial index <code>ON jobs (run_at) WHERE status = 'PENDING'</code>. Recover jobs stuck in <code>RUNNING</code> after a crash using <code>locked_at</code> plus a timeout. This is how the transactional outbox relay works too.</p>
+</div></details>
+
+<details><summary><span class="q">Database locks vs distributed locks (Redis). When do you need a distributed lock?</span><span class="tag design">design</span></summary><div class="a">
+<p><strong>Short answer:</strong> "If the data being protected lives in one Postgres database, I use the database: row locks, conditional updates, unique constraints or advisory locks. They're transactional and are released automatically if the process crashes. I use a Redis lock when the work isn't a single database write, like making sure only one pod runs a cron job or calls a rate-limited partner API, and I always give it an expiry."</p>
+<pre><code>// Redis lock: SET if Not eXists, with expiry so a crashed holder can't block forever
+const token = crypto.randomUUID();
+const ok = await redis.set('lock:device-sync:veh42', token, 'PX', 30000, 'NX');
+if (!ok) return;                      // someone else holds it
+try {
+  await syncDevice('veh42');
+} finally {
+  // release only if we still own it (atomic check-and-delete)
+  await redis.eval(
+    "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+    1, 'lock:device-sync:veh42', token);
+}</code></pre>
+<p><strong>Pitfalls:</strong> if the work takes longer than the TTL, the lock expires and a second worker starts (extend the lock, or use a fencing token that the database checks). Redlock across several Redis nodes is debated for correctness. For money, the final guard should always be the database (constraint, version check or idempotency key), not only a Redis lock.</p>
+<div class="note">Tie it to your work: "At TapFin we used Redis locks for device sync and scheduled jobs so only one pod handled a vehicle at a time. BullMQ's own job locks also stop two workers processing the same job."</div>
+</div></details>
+
+<details><summary><span class="q">Scenario: two users try to book the last seat (or withdraw from the same account) at the same moment. How do you make sure only one succeeds?</span><span class="tag design">design</span></summary><div class="a">
+<p><strong>Short answer:</strong> "Let the database decide in one atomic step. The simplest is a conditional update: <code>UPDATE seats SET booked_by = $user WHERE id = $seat AND booked_by IS NULL</code>. Only one transaction can change the row; the other sees zero rows updated and gets 'sold out'. Back it with a unique constraint so even a bug can't create two bookings."</p>
+<p><strong>Options, from simplest:</strong></p>
+<ol>
+<li><strong>Atomic conditional update</strong> (shown above). One statement, no explicit lock, no deadlock risk.</li>
+<li><strong>Unique constraint</strong> such as <code>UNIQUE (event_id, seat_no)</code> on bookings. The second insert fails with <code>23505</code>; map it to 409.</li>
+<li><strong>Pessimistic lock</strong> when you must read, decide and write several rows: <code>SELECT ... FOR UPDATE</code>, check, update, commit.</li>
+<li><strong>Optimistic version check</strong> for low-contention cases.</li>
+<li><strong>SERIALIZABLE isolation</strong> for complex rules across many rows, with retry on <code>40001</code>.</li>
+</ol>
+<p><strong>What not to do:</strong> read in the app ("is it free?") and then write in a separate statement without a lock. Between the read and the write, another request can take the seat. That's the classic check-then-act race.</p>
+<p><strong>At very high traffic</strong> (flash sales), put a Redis counter (<code>DECR</code>) or a queue in front to reject most requests early, and still let the database be the final judge.</p>
+</div></details>
+
 </section>
 
 <!-- ============ PITCH ============ -->
